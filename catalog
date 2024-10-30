@@ -1,0 +1,102 @@
+import java.io.FileReader;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+
+import org.json.JSONObject;
+import org.json.JSONTokener;
+
+public class ShamirSecretSharing {
+
+    public static void main(String[] args) {
+        try {
+            // File paths for the test cases
+            String filePath1 = "testcase1.json";
+            String filePath2 = "testcase2.json";
+
+            BigInteger constantC1 = findSecretConstant(filePath1);
+            BigInteger constantC2 = findSecretConstant(filePath2);
+
+            System.out.println("Secret constant for testcase 1: " + constantC1);
+            System.out.println("Secret constant for testcase 2: " + constantC2);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static BigInteger findSecretConstant(String filePath) throws Exception {
+        // Parse JSON input and decode values
+        List<Point> points = parseInput(filePath);
+
+        // Calculate constant term c using Lagrange interpolation at x = 0
+        return lagrangeInterpolation(points, BigInteger.ZERO);
+    }
+
+    private static List<Point> parseInput(String filePath) throws Exception {
+        // Open and parse JSON file
+        FileReader reader = new FileReader(filePath);
+        JSONObject jsonObject = new JSONObject(new JSONTokener(reader));
+        
+        int n = jsonObject.getJSONObject("keys").getInt("n");
+        int k = jsonObject.getJSONObject("keys").getInt("k");
+
+        // Store (x, y) points after decoding y values from the specified base
+        List<Point> points = new ArrayList<>();
+
+        // Collect points from JSON except for the "keys" object
+        Set<String> keys = jsonObject.keySet();
+        for (String key : keys) {
+            if (!key.equals("keys")) {
+                int x = Integer.parseInt(key);
+                JSONObject valueData = jsonObject.getJSONObject(key);
+                int base = valueData.getInt("base");
+                String encodedValue = valueData.getString("value");
+                BigInteger y = new BigInteger(encodedValue, base);
+                points.add(new Point(BigInteger.valueOf(x), y));
+            }
+        }
+
+        // Select only the first k points needed for interpolation
+        return points.subList(0, k);
+    }
+
+    private static BigInteger lagrangeInterpolation(List<Point> points, BigInteger x) {
+        BigInteger totalSum = BigInteger.ZERO;
+        int k = points.size();
+
+        for (int i = 0; i < k; i++) {
+            BigInteger xi = points.get(i).x;
+            BigInteger yi = points.get(i).y;
+
+            BigInteger liProduct = BigInteger.ONE;
+
+            for (int j = 0; j < k; j++) {
+                if (i != j) {
+                    BigInteger xj = points.get(j).x;
+                    // Calculate numerator and denominator for Lagrange basis polynomial
+                    BigInteger numerator = x.subtract(xj);
+                    BigInteger denominator = xi.subtract(xj);
+                    
+                    // Ensure we use modular arithmetic to avoid precision loss
+                    liProduct = liProduct.multiply(numerator).divide(denominator);
+                }
+            }
+
+            // Add the product term yi * liProduct to total sum
+            totalSum = totalSum.add(yi.multiply(liProduct));
+        }
+
+        return totalSum;
+    }
+
+    static class Point {
+        BigInteger x;
+        BigInteger y;
+
+        Point(BigInteger x, BigInteger y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+}
